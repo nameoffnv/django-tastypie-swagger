@@ -310,7 +310,7 @@ class ResourceSwaggerMapping(object):
 
         return parameters
 
-    def build_detail_operation(self, method='get'):
+    def build_detail_operation(self, method='get', extra_docs=None):
         operation = {
             'summary': self.get_operation_summary(detail=True, method=method),
             'httpMethod': method.upper(),
@@ -326,10 +326,22 @@ class ResourceSwaggerMapping(object):
             'nickname': '%s_detail' % self.resource_name,
             'notes': self.resource.__doc__,
         }
+
+        if extra_docs and extra_docs.get('%s_detail' % method):
+            extra = extra_docs.get('%s_detail' % method)
+            operation['notes'] = extra.get('notes') or operation['notes']
+            operation['responseClass'] = extra.get('responseClass') or operation['responseClass']
+            if extra.get('fields'):
+                operation['parameters'] = self.build_parameters_from_extra_action(
+                    method=method,
+                    fields=extra.get('fields'),
+                    resource_type='detail'
+                )
+
         return operation
 
-    def build_list_operation(self, method='get'):
-        return {
+    def build_list_operation(self, method='get', extra_docs=None):
+        operation = {
             'summary': self.get_operation_summary(detail=False, method=method),
             'httpMethod': method.upper(),
             'parameters': self.build_parameters_for_list(method=method),
@@ -337,6 +349,19 @@ class ResourceSwaggerMapping(object):
             'nickname': '%s_list' % self.resource_name,
             'notes': self.resource.__doc__,
         }
+
+        if extra_docs and extra_docs.get('%s_list' % method):
+            extra = extra_docs.get('%s_list' % method)
+            operation['notes'] = extra.get('notes') or operation['notes']
+            operation['responseClass'] = extra.get('responseClass') or operation['responseClass']
+            if extra.get('fields'):
+                operation['parameters'] = self.build_parameters_from_extra_action(
+                    method=method,
+                    fields=extra.get('fields'),
+                    resource_type='list'
+                )
+        
+        return operation
 
     def build_extra_operation(self, extra_action):
         if "name" not in extra_action:
@@ -361,31 +386,41 @@ class ResourceSwaggerMapping(object):
             'operations': [],
         }
 
+        swagger_docs = getattr(self.resource._meta, 'swagger_docs', None)
+
         if 'get' in self.schema['allowed_detail_http_methods']:
-            detail_api['operations'].append(self.build_detail_operation(method='get'))
+            detail_api['operations'].append(self.build_detail_operation(method='get', extra_docs=swagger_docs))
 
         if 'put' in self.schema['allowed_detail_http_methods']:
-            operation = self.build_detail_operation(method='put')
-            operation['parameters'].append(self.build_parameter_for_object(method='put'))
+            operation = self.build_detail_operation(method='put', extra_docs=swagger_docs)
+
+            if not operation['parameters']:
+                operation['parameters'].append(self.build_parameter_for_object(method='put'))
+
             detail_api['operations'].append(operation)
 
         if 'delete' in self.schema['allowed_detail_http_methods']:
-            detail_api['operations'].append(self.build_detail_operation(method='delete'))
+            detail_api['operations'].append(self.build_detail_operation(method='delete', extra_docs=swagger_docs))
 
         return detail_api
-
+    
     def build_list_api(self):
         list_api = {
             'path': self.get_resource_base_uri(),
             'operations': [],
         }
 
+        swagger_docs = getattr(self.resource._meta, 'swagger_docs', None)
+
         if 'get' in self.schema['allowed_list_http_methods']:
-            list_api['operations'].append(self.build_list_operation(method='get'))
+            list_api['operations'].append(self.build_list_operation(method='get', extra_docs=swagger_docs))
 
         if 'post' in self.schema['allowed_list_http_methods']:
-            operation = self.build_list_operation(method='post')
-            operation['parameters'].append(self.build_parameter_for_object(method='post'))
+            operation = self.build_list_operation(method='post', extra_docs=swagger_docs)
+
+            if not operation['parameters']:
+                operation['parameters'].append(self.build_parameter_for_object(method='post'))
+
             list_api['operations'].append(operation)
 
         return list_api
